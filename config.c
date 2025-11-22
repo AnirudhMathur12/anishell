@@ -75,7 +75,7 @@ char *get_alias(char *name) {
     return NULL;
 }
 
-int resolve_aliases(char **args_ptr) {
+int resolve_aliases(char ***args_ptr) {
     char **args = *args_ptr;
     if (!args[0])
         return 0;

@@ -9,7 +9,7 @@ void exec_command_line(char *line) {
         return;
     }
 
-    resolve_aliases(args);
+    resolve_aliases(&args);
 
     expand_args(args);
 
