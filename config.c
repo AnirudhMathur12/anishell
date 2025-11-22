@@ -1,5 +1,5 @@
 #include "shell.h"
-#include <_string.h>
+#include <string.h>
 
 #define MAX_VARS 4096
 #define MAX_ALIASES 4096
