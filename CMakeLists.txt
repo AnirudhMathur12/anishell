@@ -10,4 +10,9 @@ add_compile_options(-fsanitize=address -g)
 
 set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fsanitize=address")
 
-add_executable(anishell main.c)
+add_executable(anishell
+                    main.c
+                    parser.c
+                    input.c
+                    autocomplete.c
+                    shell.h)

@@ -1,346 +1,15 @@
-#include <ctype.h>
-#include <dirent.h>
-#include <fcntl.h>
-#include <signal.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <sys/fcntl.h>
-#include <sys/wait.h>
-#include <termios.h>
-#include <unistd.h>
-
-char **prev;
-int iter;
-
-struct termios orig_termios;
-
-typedef struct {
-    char **items;
-    int count;
-} MatchList;
-
-void free_match_list(MatchList *list) {
-    if (list->items) {
-        for (int i = 0; i < list->count; i++) {
-            free(list->items[i]);
-        }
-        free(list->items);
-        list->items = NULL;
-    }
-
-    list->count = 0;
-}
-
-MatchList get_matching_files(const char *prefix) {
-    MatchList list = {NULL, 0};
-    DIR *d;
-    struct dirent *dir;
-
-    d = opendir(".");
-    if (d) {
-        int capacity = 10;
-        list.items = malloc(capacity * sizeof(char *));
-        int prefix_len = strlen(prefix);
-
-        while ((dir = readdir(d)) != NULL) {
-            if (strncmp(dir->d_name, prefix, prefix_len) == 0) {
-                if (strcmp(dir->d_name, ".") == 0 ||
-                    strcmp(dir->d_name, "..") == 0)
-                    continue;
-
-                if (list.count >= capacity) {
-                    capacity *= 2;
-                    list.items = realloc(list.items, capacity * sizeof(char *));
-                }
-                list.items[list.count++] = strdup(dir->d_name);
-            }
-        }
-        closedir(d);
-    }
-
-    return list;
-}
-
-void disableRawMode() { tcsetattr(STDIN_FILENO, TCSAFLUSH, &orig_termios); }
-
-void enableRawMode() {
-    tcgetattr(STDIN_FILENO, &orig_termios);
-    atexit(disableRawMode);
-
-    struct termios raw = orig_termios;
-    raw.c_lflag &= ~(ECHO | ICANON | ECHONL | IEXTEN);
-
-    tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
-}
-
-MatchList matches = {NULL, 0};
-int match_index = 0;
-int is_tabbing = 0;
-char *original_prefix = NULL;
-int last_match_len = 0;
-
-char *read_input(void) {
-    char c;
-    char *buf = malloc(1024);
-    int buf_len = 0;
-    int cursor_pos = 0;
-    int prev_iter = iter;
-
-    memset(buf, 0, 1024);
-
-    while (read(STDIN_FILENO, &c, 1) == 1) {
-        if (c == '\x1b') {
-            char seq[3];
-            if (read(STDIN_FILENO, &seq[0], 1) != 1)
-                return NULL;
-            if (read(STDIN_FILENO, &seq[1], 1) != 1)
-                return NULL;
-
-            if (seq[0] == '[') {
-                switch (seq[1]) {
-                case 'A': // UP ARROW (History)
-                    if (prev_iter > 0) {
-                        while (cursor_pos > 0) {
-                            printf("\b");
-                            cursor_pos--;
-                        }
-                        for (int i = 0; i < buf_len; i++)
-                            printf(" ");
-                        for (int i = 0; i < buf_len; i++)
-                            printf("\b");
-
-                        prev_iter--;
-                        char *history_str = prev[prev_iter];
-                        memset(buf, 0, 1024);
-                        if (history_str)
-                            strncpy(buf, history_str, 1023);
-
-                        buf_len = strlen(buf);
-                        cursor_pos = buf_len;
-                        printf("%s", buf);
-                    }
-                    break;
-                case 'B': // DOWN ARROW
-                    if (prev_iter < iter) {
-                        // Erase visual line
-                        while (cursor_pos > 0) {
-                            printf("\b");
-                            cursor_pos--;
-                        }
-                        for (int i = 0; i < buf_len; i++)
-                            printf(" ");
-                        for (int i = 0; i < buf_len; i++)
-                            printf("\b");
-
-                        prev_iter++;
-                        memset(buf, 0, 1024);
-                        if (prev_iter < iter) {
-                            strncpy(buf, prev[prev_iter], 1023);
-                        }
-
-                        buf_len = strlen(buf);
-                        cursor_pos = buf_len;
-                        printf("%s", buf);
-                    }
-                    break;
-
-                case 'C': // RIGHT ARROW
-                    if (cursor_pos < buf_len) {
-                        printf("\033[C");
-                        cursor_pos++;
-                    }
-                    break;
-                case 'D': // LEFT ARROW
-                    if (cursor_pos > 0) {
-                        printf("\033[D");
-                        cursor_pos--;
-                    }
-                    break;
-                }
-            }
-            fflush(stdout);
-            continue;
-        }
-
-        if (c != '\t' && is_tabbing) {
-            is_tabbing = 0;
-            free_match_list(&matches);
-            if (original_prefix) {
-                free(original_prefix);
-                original_prefix = NULL;
-            }
-            last_match_len = 0;
-        }
-
-        if (c == '\t') {
-            if (!is_tabbing) {
-                int start = cursor_pos;
-
-                while (start > 0 && buf[start - 1] != ' ') {
-                    start--;
-                }
-
-                int len = cursor_pos - start;
-                if (len >= 0) {
-                    original_prefix = malloc(len + 1);
-                    strncpy(original_prefix, &buf[start], len);
-                    original_prefix[len] = '\0';
-
-                    matches = get_matching_files(original_prefix);
-                    if (matches.count > 0) {
-                        is_tabbing = 1;
-                        match_index = 0;
-                        last_match_len = len;
-                    }
-                }
-            }
-
-            if (is_tabbing && matches.count > 0) {
-                char *current_match = matches.items[match_index];
-                int start = buf_len;
-                while (start > 0 && buf[start - 1] != ' ') {
-                    start--;
-                }
-
-                int chars_to_back = buf_len - start;
-                for (int i = 0; i < chars_to_back; i++) {
-                    printf("\b");
-                }
-                printf("\033[K");
-
-                buf_len = start;
-
-                strcpy(&buf[buf_len], current_match);
-                int match_len = strlen(current_match);
-                buf_len += match_len;
-                cursor_pos = buf_len;
-
-                printf("%s", current_match);
-
-                match_index = (match_index + 1) % matches.count;
-            }
-
-            fflush(stdout);
-            continue;
-        }
-
-        if (c == 4) { // Ctrl + D
-            exit(0);
-        }
-
-        if (iscntrl(c)) {
-            if (c == 10 || c == 13) { // ENTER
-                buf[buf_len] = '\0';
-                printf("\r\n");
-                return buf;
-            } else if (c == 127) { // BACKSPACE
-                if (cursor_pos > 0) {
-                    if (cursor_pos == buf_len) {
-                        cursor_pos--;
-                        buf_len--;
-                        buf[buf_len] = '\0';
-                        printf("\b \b");
-                    } else {
-                        memmove(&buf[cursor_pos - 1], &buf[cursor_pos],
-                                buf_len - cursor_pos);
-                        cursor_pos--;
-                        buf_len--;
-                        buf[buf_len] = '\0';
-
-                        printf("\b");
-                        printf("%s ", &buf[cursor_pos]);
-                        for (int i = 0; i < (buf_len - cursor_pos + 1); i++)
-                            printf("\b");
-                    }
-                }
-            }
-        } else if (buf_len < 1023) {
-
-            if (cursor_pos == buf_len) {
-                buf[cursor_pos] = c;
-                cursor_pos++;
-                buf_len++;
-                printf("%c", c);
-            } else {
-                memmove(&buf[cursor_pos + 1], &buf[cursor_pos],
-                        buf_len - cursor_pos);
-
-                buf[cursor_pos] = c;
-                buf_len++;
-                cursor_pos++;
-                printf("%s", &buf[cursor_pos - 1]);
-
-                for (int i = 0; i < (buf_len - cursor_pos); i++) {
-                    printf("\b");
-                }
-            }
-        }
-        fflush(stdout);
-    }
-    return buf;
-}
+#include "shell.h"
 
 void handle_sigint(int sig) { printf("\r\n"); }
 
-char **get_args(char *line) {
-    int capacity = 16;
-    char **args = malloc(capacity * sizeof(char *));
-    int count = 0;
-    char *ptr = line;
-
-    while (*ptr) {
-        while (*ptr && isspace(*ptr)) {
-            ptr++;
-        }
-
-        if (*ptr == '\0')
-            break;
-
-        if (*ptr == '"') {
-            ptr++;
-            args[count++] = ptr;
-
-            while (*ptr && *ptr != '"') {
-                ptr++;
-            }
-
-            if (*ptr == '"') {
-                *ptr = '\0';
-                ptr++;
-            }
-        }
-
-        else {
-            args[count++] = ptr;
-
-            while (*ptr && !isspace(*ptr)) {
-                ptr++;
-            }
-
-            if (*ptr && isspace(*ptr)) {
-                *ptr = '\0';
-                ptr++;
-            }
-        }
-        if (count >= capacity - 1) {
-            capacity *= 2;
-            args = realloc(args, capacity * sizeof(char *));
-        }
-    }
-
-    args[count] = NULL;
-    return args;
-}
-
 int main(void) {
     enableRawMode();
+    init_history();
+
     char *buf = NULL;
     char cwd[1024];
-    prev = malloc(sizeof(char *) * 1024);
-    iter = 0;
-
     char **args = NULL;
+
     signal(SIGINT, handle_sigint);
 
     do {
@@ -353,14 +22,14 @@ int main(void) {
 
         buf = read_input();
 
-        // empty input
         if (!buf || strlen(buf) == 0) {
             if (buf)
                 free(buf);
             continue;
         }
 
-        prev[iter++] = strdup(buf);
+        add_to_history(buf);
+
         args = get_args(buf);
 
         if (args[0] == NULL) {
@@ -390,7 +59,7 @@ int main(void) {
                     chdir(home);
             } else {
                 if (chdir(args[1]) != 0) {
-                    printf("lsh: No such file or directory\r\n");
+                    printf("anishell: No such file or directory\r\n");
                 }
             }
             free(args);
@@ -406,6 +75,8 @@ int main(void) {
         int status;
 
         if (pid == 0) {
+            // CHILD PROCESS
+
             disableRawMode();
 
             signal(SIGINT, SIG_DFL);
@@ -418,6 +89,7 @@ int main(void) {
                     dup2(fd, STDOUT_FILENO);
                     close(fd);
                     args[i] = NULL;
+
                     break;
                 } else if (strcmp(">>", args[i]) == 0) {
                     int fd =
@@ -431,10 +103,11 @@ int main(void) {
             }
 
             if (execvp(args[0], args) == -1) {
-                printf("lsh: command not found\n");
+                printf("anishell: command not found\n");
             }
             exit(EXIT_FAILURE);
         } else {
+            // PARENT PROCESS
             do {
                 waitpid(pid, &status, WUNTRACED);
             } while (!WIFEXITED(status) && !WIFSIGNALED(status));
