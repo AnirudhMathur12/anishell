@@ -284,20 +284,52 @@ char *read_input(void) {
 void handle_sigint(int sig) { printf("\r\n"); }
 
 char **get_args(char *line) {
-    int size = 8;
-    char **args = malloc(size * sizeof(char *));
-    int i = 0;
-    char *tok = strtok(line, " \t\n");
+    int capacity = 16;
+    char **args = malloc(capacity * sizeof(char *));
+    int count = 0;
+    char *ptr = line;
 
-    while (tok) {
-        args[i++] = tok;
-        tok = strtok(NULL, " \t\n");
+    while (*ptr) {
+        while (*ptr && isspace(*ptr)) {
+            ptr++;
+        }
 
-        if (i == size - 1) {
-            args = realloc(args, size * sizeof(char *) * 1.5);
+        if (*ptr == '\0')
+            break;
+
+        if (*ptr == '"') {
+            ptr++;
+            args[count++] = ptr;
+
+            while (*ptr && *ptr != '"') {
+                ptr++;
+            }
+
+            if (*ptr == '"') {
+                *ptr = '\0';
+                ptr++;
+            }
+        }
+
+        else {
+            args[count++] = ptr;
+
+            while (*ptr && !isspace(*ptr)) {
+                ptr++;
+            }
+
+            if (*ptr && isspace(*ptr)) {
+                *ptr = '\0';
+                ptr++;
+            }
+        }
+        if (count >= capacity - 1) {
+            capacity *= 2;
+            args = realloc(args, capacity * sizeof(char *));
         }
     }
-    args[i] = NULL;
+
+    args[count] = NULL;
     return args;
 }
 
