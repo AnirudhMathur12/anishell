@@ -29,7 +29,8 @@ void enableRawMode() {
 char *read_input(void) {
     char c;
     char *buf = malloc(1024);
-    int buf_iter = 0;
+    int buf_len = 0;
+    int cursor_pos = 0;
     int prev_iter = iter;
 
     memset(buf, 0, 1024);
@@ -44,35 +45,62 @@ char *read_input(void) {
 
             if (seq[0] == '[') {
                 switch (seq[1]) {
-                case 'A': // UP ARROW
+                case 'A': // UP ARROW (History)
                     if (prev_iter > 0) {
-                        for (int i = 0; i < buf_iter; i++) {
-                            printf("\b \b");
+                        while (cursor_pos > 0) {
+                            printf("\b");
+                            cursor_pos--;
                         }
+                        for (int i = 0; i < buf_len; i++)
+                            printf(" ");
+                        for (int i = 0; i < buf_len; i++)
+                            printf("\b");
 
                         prev_iter--;
                         char *history_str = prev[prev_iter];
                         memset(buf, 0, 1024);
-                        strncpy(buf, history_str, 1023);
+                        if (history_str)
+                            strncpy(buf, history_str, 1023);
 
-                        buf_iter = strlen(buf);
+                        buf_len = strlen(buf);
+                        cursor_pos = buf_len;
                         printf("%s", buf);
                     }
                     break;
                 case 'B': // DOWN ARROW
                     if (prev_iter < iter) {
-                        for (int i = 0; i < buf_iter; i++)
-                            printf("\b \b");
-                        prev_iter++;
-                        if (prev_iter < iter) {
-                            memset(buf, 0, 1024);
-                            strncpy(buf, prev[prev_iter], 1023);
-                            buf_iter = strlen(buf);
-                            printf("%s", buf);
-                        } else {
-                            memset(buf, 0, 1024);
-                            buf_iter = 0;
+                        // Erase visual line
+                        while (cursor_pos > 0) {
+                            printf("\b");
+                            cursor_pos--;
                         }
+                        for (int i = 0; i < buf_len; i++)
+                            printf(" ");
+                        for (int i = 0; i < buf_len; i++)
+                            printf("\b");
+
+                        prev_iter++;
+                        memset(buf, 0, 1024);
+                        if (prev_iter < iter) {
+                            strncpy(buf, prev[prev_iter], 1023);
+                        }
+
+                        buf_len = strlen(buf);
+                        cursor_pos = buf_len;
+                        printf("%s", buf);
+                    }
+                    break;
+
+                case 'C': // RIGHT ARROW
+                    if (cursor_pos < buf_len) {
+                        printf("\033[C");
+                        cursor_pos++;
+                    }
+                    break;
+                case 'D': // LEFT ARROW
+                    if (cursor_pos > 0) {
+                        printf("\033[D");
+                        cursor_pos--;
                     }
                     break;
                 }
@@ -82,20 +110,51 @@ char *read_input(void) {
         }
 
         if (iscntrl(c)) {
-            if (c == 10 || c == 13) {
-                buf[buf_iter] = '\0';
+            if (c == 10 || c == 13) { // ENTER
+                buf[buf_len] = '\0';
                 printf("\r\n");
                 return buf;
-            } else if (c == 127) { // Backspace
-                if (buf_iter > 0) {
-                    buf_iter--;
-                    buf[buf_iter] = '\0';
-                    printf("\b \b");
+            } else if (c == 127) { // BACKSPACE
+                if (cursor_pos > 0) {
+                    if (cursor_pos == buf_len) {
+                        cursor_pos--;
+                        buf_len--;
+                        buf[buf_len] = '\0';
+                        printf("\b \b");
+                    } else {
+                        memmove(&buf[cursor_pos - 1], &buf[cursor_pos],
+                                buf_len - cursor_pos);
+                        cursor_pos--;
+                        buf_len--;
+                        buf[buf_len] = '\0';
+
+                        printf("\b");
+                        printf("%s ", &buf[cursor_pos]);
+                        for (int i = 0; i < (buf_len - cursor_pos + 1); i++)
+                            printf("\b");
+                    }
                 }
             }
-        } else if (buf_iter < 1023) {
-            buf[buf_iter++] = c;
-            printf("%c", c);
+        } else if (buf_len < 1023) {
+
+            if (cursor_pos == buf_len) {
+                buf[cursor_pos] = c;
+                cursor_pos++;
+                buf_len++;
+                printf("%c", c);
+            } else {
+                memmove(&buf[cursor_pos + 1], &buf[cursor_pos],
+                        buf_len - cursor_pos);
+
+                buf[cursor_pos] = c;
+                buf_len++;
+                cursor_pos++;
+                printf("%s", &buf[cursor_pos - 1]);
+
+                for (int i = 0; i < (buf_len - cursor_pos); i++) {
+                    printf("\b");
+                }
+            }
         }
         fflush(stdout);
     }
