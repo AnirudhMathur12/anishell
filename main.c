@@ -1,7 +1,9 @@
+#include <fcntl.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/fcntl.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
@@ -54,6 +56,10 @@ int main(void) {
             }
         }
 
+        if (strcmp(buf, "\n") == 0) {
+            continue;
+        }
+
         args = get_args(buf);
 
         int i = 0;
@@ -71,7 +77,14 @@ int main(void) {
         }
 
         if (strcmp(args[0], "cd") == 0) {
-            chdir(args[1]);
+            if (args[1] == NULL) {
+                fprintf(stderr, "lsh: Expected arguement to cd\n");
+            } else {
+                if (chdir(args[1]) != 0) {
+                    perror("lsh");
+                }
+            }
+            free(args);
             continue;
         } else if (strcmp(args[0], "exit") == 0) {
             exit(0);
@@ -82,6 +95,62 @@ int main(void) {
 
         if (pid == 0) {
             // Child
+            //
+            i = 0;
+            while (args[i]) {
+                if (strcmp(">", args[i]) == 0) {
+                    if (args[i + 1] == NULL) {
+                        fprintf(stderr, "lsh: Expected output file\n");
+                        exit(EXIT_FAILURE);
+                    }
+                    const char *out = args[i + 1];
+
+                    int fd = open(out, O_WRONLY | O_TRUNC | O_CREAT, 0644);
+
+                    if (fd == -1) {
+                        perror("open");
+                        exit(EXIT_FAILURE);
+                    }
+
+                    if (dup2(fd, STDOUT_FILENO) == -1) {
+                        perror("dup2");
+                        exit(EXIT_FAILURE);
+                    }
+
+                    close(fd);
+
+                    args[i] = NULL;
+
+                    break;
+                } else if (strcmp(">>", args[i]) == 0) {
+                    if (args[i + 1] == NULL) {
+                        fprintf(stderr, "lsh: Expected output file\n");
+                        exit(EXIT_FAILURE);
+                    }
+                    const char *out = args[i + 1];
+
+                    int fd = open(out, O_WRONLY | O_APPEND | O_CREAT, 0644);
+
+                    if (fd == -1) {
+                        perror("open");
+                        exit(EXIT_FAILURE);
+                    }
+
+                    if (dup2(fd, STDOUT_FILENO) == -1) {
+                        perror("dup2");
+                        exit(EXIT_FAILURE);
+                    }
+
+                    close(fd);
+
+                    args[i] = NULL;
+
+                    break;
+                }
+
+                i++;
+            }
+
             if (execvp(args[0], args) == -1) {
                 perror("lsh");
             }
