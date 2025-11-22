@@ -18,6 +18,17 @@ typedef struct {
     int count;
 } MatchList;
 
+typedef struct {
+    char *key;
+    char *value;
+    int exported;
+} ShellVar;
+
+typedef struct {
+    char *name;
+    char *value;
+} Alias;
+
 // Function Declarations
 
 // input.c
@@ -33,5 +44,14 @@ char **get_args(char *line);
 // autocomplete.c
 MatchList get_matching_files(const char *prefix);
 void free_match_list(MatchList *list);
+
+// config.c
+void init_config();
+void set_shell_var(char *key, char *value, int exported);
+char *get_shell_var(char *key);
+void add_alias(char *name, char *value);
+char *get_alias(char *name);
+int resolve_aliases(char **args_ptr);
+void expand_args(char **args);
 
 #endif

@@ -15,4 +15,5 @@ add_executable(anishell
                     parser.c
                     input.c
                     autocomplete.c
+                    config.c
                     shell.h)
