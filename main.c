@@ -1,4 +1,5 @@
 #include <ctype.h>
+#include <dirent.h>
 #include <fcntl.h>
 #include <signal.h>
 #include <stdio.h>
@@ -14,6 +15,53 @@ int iter;
 
 struct termios orig_termios;
 
+typedef struct {
+    char **items;
+    int count;
+} MatchList;
+
+void free_match_list(MatchList *list) {
+    if (list->items) {
+        for (int i = 0; i < list->count; i++) {
+            free(list->items[i]);
+        }
+        free(list->items);
+        list->items = NULL;
+    }
+
+    list->count = 0;
+}
+
+MatchList get_matching_files(const char *prefix) {
+    MatchList list = {NULL, 0};
+    DIR *d;
+    struct dirent *dir;
+
+    d = opendir(".");
+    if (d) {
+        int capacity = 10;
+        list.items = malloc(capacity * sizeof(char *));
+        int prefix_len = strlen(prefix);
+
+        while ((dir = readdir(d)) != NULL) {
+            if (strncmp(dir->d_name, prefix, prefix_len) == 0) {
+                if (strcmp(dir->d_name, ".") == 0 ||
+                    strcmp(dir->d_name, "..") == 0)
+                    continue;
+
+                if (list.count >= capacity) {
+                    capacity *= 2;
+                    list.items = realloc(list.items, capacity * sizeof(char *));
+                }
+                list.items[list.count++] = strdup(dir->d_name);
+            }
+        }
+        closedir(d);
+    }
+
+    return list;
+}
+
 void disableRawMode() { tcsetattr(STDIN_FILENO, TCSAFLUSH, &orig_termios); }
 
 void enableRawMode() {
@@ -25,6 +73,12 @@ void enableRawMode() {
 
     tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
 }
+
+MatchList matches = {NULL, 0};
+int match_index = 0;
+int is_tabbing = 0;
+char *original_prefix = NULL;
+int last_match_len = 0;
 
 char *read_input(void) {
     char c;
@@ -107,6 +161,72 @@ char *read_input(void) {
             }
             fflush(stdout);
             continue;
+        }
+
+        if (c != '\t' && is_tabbing) {
+            is_tabbing = 0;
+            free_match_list(&matches);
+            if (original_prefix) {
+                free(original_prefix);
+                original_prefix = NULL;
+            }
+            last_match_len = 0;
+        }
+
+        if (c == '\t') {
+            if (!is_tabbing) {
+                int start = cursor_pos;
+
+                while (start > 0 && buf[start - 1] != ' ') {
+                    start--;
+                }
+
+                int len = cursor_pos - start;
+                if (len >= 0) {
+                    original_prefix = malloc(len + 1);
+                    strncpy(original_prefix, &buf[start], len);
+                    original_prefix[len] = '\0';
+
+                    matches = get_matching_files(original_prefix);
+                    if (matches.count > 0) {
+                        is_tabbing = 1;
+                        match_index = 0;
+                        last_match_len = len;
+                    }
+                }
+            }
+
+            if (is_tabbing && matches.count > 0) {
+                char *current_match = matches.items[match_index];
+                int start = buf_len;
+                while (start > 0 && buf[start - 1] != ' ') {
+                    start--;
+                }
+
+                int chars_to_back = buf_len - start;
+                for (int i = 0; i < chars_to_back; i++) {
+                    printf("\b");
+                }
+                printf("\033[K");
+
+                buf_len = start;
+
+                strcpy(&buf[buf_len], current_match);
+                int match_len = strlen(current_match);
+                buf_len += match_len;
+                cursor_pos = buf_len;
+
+                printf("%s", current_match);
+
+                match_index = (match_index + 1) % matches.count;
+            }
+
+            fflush(stdout);
+            continue;
+        }
+
+        if (c == 4) { // Ctrl + D
+            exit(0);
         }
 
         if (iscntrl(c)) {
@@ -201,7 +321,7 @@ int main(void) {
 
         buf = read_input();
 
-        // ctrl D or empty input
+        // empty input
         if (!buf || strlen(buf) == 0) {
             if (buf)
                 free(buf);
