@@ -78,14 +78,21 @@ int main(void) {
 
         if (strcmp(args[0], "cd") == 0) {
             if (args[1] == NULL) {
-                fprintf(stderr, "lsh: Expected arguement to cd\n");
+                char *home = getenv("HOME");
+                if (home == NULL) {
+                    fprintf(stderr, "lsh: could not find HOME variable");
+                } else {
+                    if (chdir(home) != 0) {
+                        perror("lsh");
+                    }
+                }
             } else {
                 if (chdir(args[1]) != 0) {
                     perror("lsh");
                 }
+                free(args);
+                continue;
             }
-            free(args);
-            continue;
         } else if (strcmp(args[0], "exit") == 0) {
             exit(0);
         }
