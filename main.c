@@ -21,82 +21,62 @@ void enableRawMode() {
     atexit(disableRawMode);
 
     struct termios raw = orig_termios;
-    raw.c_lflag &= ~(ECHO | ICANON);
+    raw.c_lflag &= ~(ECHO | ICANON | ECHONL | IEXTEN);
 
     tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
 }
 
 char *read_input(void) {
-
     char c;
-
     char *buf = malloc(1024);
-    char *stored_temp;
-    int stored_size = 0;
     int buf_iter = 0;
     int prev_iter = iter;
-    int stored = 0;
 
     memset(buf, 0, 1024);
 
-    while (read(STDIN_FILENO, &c, 1) == 1 && c != 'q') {
+    while (read(STDIN_FILENO, &c, 1) == 1) {
         if (c == '\x1b') {
             char seq[3];
             if (read(STDIN_FILENO, &seq[0], 1) != 1)
-                return 0;
+                return NULL;
             if (read(STDIN_FILENO, &seq[1], 1) != 1)
-                return 0;
+                return NULL;
 
             if (seq[0] == '[') {
                 switch (seq[1]) {
-                case 'A':
-
+                case 'A': // UP ARROW
                     if (prev_iter > 0) {
-                        if (!stored) {
-                            stored_temp = buf;
-                            stored_size = buf_iter;
-                            stored = 1;
-                        }
                         for (int i = 0; i < buf_iter; i++) {
                             printf("\b \b");
                         }
-                        buf = prev[--prev_iter];
+
+                        prev_iter--;
+                        char *history_str = prev[prev_iter];
+                        memset(buf, 0, 1024);
+                        strncpy(buf, history_str, 1023);
+
                         buf_iter = strlen(buf);
                         printf("%s", buf);
-                    } else {
-                        printf("\a");
                     }
                     break;
-                case 'B':
+                case 'B': // DOWN ARROW
                     if (prev_iter < iter) {
-                        for (int i = 0; i < buf_iter; i++) {
+                        for (int i = 0; i < buf_iter; i++)
                             printf("\b \b");
-                        }
-                        buf = prev[prev_iter++];
-                        buf_iter = strlen(buf);
-                        printf("%s", buf);
-                    } else {
-                        if (stored) {
-                            for (int i = 0; i < buf_iter; i++) {
-                                printf("\b \b");
-                            }
-                            buf = stored_temp;
-                            buf_iter = stored_size;
-                            stored = 0;
+                        prev_iter++;
+                        if (prev_iter < iter) {
+                            memset(buf, 0, 1024);
+                            strncpy(buf, prev[prev_iter], 1023);
+                            buf_iter = strlen(buf);
                             printf("%s", buf);
+                        } else {
+                            memset(buf, 0, 1024);
+                            buf_iter = 0;
                         }
-                        printf("\a");
                     }
-                    break;
-                case 'C':
-                    printf("RIGHT ARROW DETECTED!\r\n");
-                    break;
-                case 'D':
-                    printf("LEFT ARROW DETECTED!\r\n");
                     break;
                 }
             }
-
             fflush(stdout);
             continue;
         }
@@ -106,7 +86,7 @@ char *read_input(void) {
                 buf[buf_iter] = '\0';
                 printf("\r\n");
                 return buf;
-            } else if (c == 127) {
+            } else if (c == 127) { // Backspace
                 if (buf_iter > 0) {
                     buf_iter--;
                     buf[buf_iter] = '\0';
@@ -117,12 +97,12 @@ char *read_input(void) {
             buf[buf_iter++] = c;
             printf("%c", c);
         }
-
         fflush(stdout);
     }
+    return buf;
 }
 
-void handle_sigint(int sig) { printf("\n"); }
+void handle_sigint(int sig) { printf("\r\n"); }
 
 char **get_args(char *line) {
     int size = 8;
@@ -138,18 +118,14 @@ char **get_args(char *line) {
             args = realloc(args, size * sizeof(char *) * 1.5);
         }
     }
-
     args[i] = NULL;
-
     return args;
 }
 
 int main(void) {
-
     enableRawMode();
     char *buf = NULL;
     char cwd[1024];
-    size_t len = 0;
     prev = malloc(sizeof(char *) * 1024);
     iter = 0;
 
@@ -158,34 +134,27 @@ int main(void) {
 
     do {
         if (getcwd(cwd, sizeof(cwd)) != NULL) {
-            printf("%s> ", cwd);
+            printf("\033[1;34m%s\033[0m> ", cwd);
         } else {
-            perror("getcwd() error");
             printf("> ");
         }
         fflush(stdout);
 
-        // if (getline(&buf, &len, stdin) == -1) {
-        //     if (feof(stdin)) {
-        //         printf("\n");
-        //         break;
-        //     } else {
-        //         clearerr(stdin);
-        //         continue;
-        //     }
-        // }
-
         buf = read_input();
-        prev[iter++] = strdup(buf);
 
-        if (strcmp(buf, "\n") == 0) {
+        // ctrl D or empty input
+        if (!buf || strlen(buf) == 0) {
+            if (buf)
+                free(buf);
             continue;
         }
 
+        prev[iter++] = strdup(buf);
         args = get_args(buf);
 
         if (args[0] == NULL) {
             free(args);
+            free(buf);
             continue;
         }
 
@@ -206,24 +175,19 @@ int main(void) {
         if (strcmp(args[0], "cd") == 0) {
             if (args[1] == NULL) {
                 char *home = getenv("HOME");
-                if (home == NULL) {
-                    fprintf(stderr, "lsh: could not find HOME variable");
-                    fflush(stdout);
-                } else {
-                    if (chdir(home) != 0) {
-                        perror("lsh");
-                    }
-                    fflush(stdout);
-                }
+                if (home)
+                    chdir(home);
             } else {
                 if (chdir(args[1]) != 0) {
-                    perror("lsh");
-                    fflush(stdout);
+                    printf("lsh: No such file or directory\r\n");
                 }
-                free(args);
-                continue;
             }
+            free(args);
+            free(buf);
+            continue;
         } else if (strcmp(args[0], "exit") == 0) {
+            free(args);
+            free(buf);
             exit(0);
         }
 
@@ -231,86 +195,44 @@ int main(void) {
         int status;
 
         if (pid == 0) {
-            // Child
-            //
+            disableRawMode();
+
+            signal(SIGINT, SIG_DFL);
+
             i = 0;
             while (args[i]) {
                 if (strcmp(">", args[i]) == 0) {
-                    if (args[i + 1] == NULL) {
-                        fprintf(stderr, "lsh: Expected output file\n");
-                        fflush(stdout);
-                        exit(EXIT_FAILURE);
-                    }
-                    const char *out = args[i + 1];
-
-                    int fd = open(out, O_WRONLY | O_TRUNC | O_CREAT, 0644);
-
-                    if (fd == -1) {
-                        perror("open");
-                        fflush(stdout);
-                        exit(EXIT_FAILURE);
-                    }
-
-                    if (dup2(fd, STDOUT_FILENO) == -1) {
-                        perror("dup2");
-                        fflush(stdout);
-                        exit(EXIT_FAILURE);
-                    }
-
+                    int fd =
+                        open(args[i + 1], O_WRONLY | O_TRUNC | O_CREAT, 0644);
+                    dup2(fd, STDOUT_FILENO);
                     close(fd);
-
                     args[i] = NULL;
-
                     break;
                 } else if (strcmp(">>", args[i]) == 0) {
-                    if (args[i + 1] == NULL) {
-                        fprintf(stderr, "lsh: Expected output file\n");
-                        fflush(stdout);
-                        exit(EXIT_FAILURE);
-                    }
-                    const char *out = args[i + 1];
-
-                    int fd = open(out, O_WRONLY | O_APPEND | O_CREAT, 0644);
-
-                    if (fd == -1) {
-                        perror("open");
-                        fflush(stdout);
-                        exit(EXIT_FAILURE);
-                    }
-
-                    if (dup2(fd, STDOUT_FILENO) == -1) {
-                        perror("dup2");
-                        fflush(stdout);
-                        exit(EXIT_FAILURE);
-                    }
-
+                    int fd =
+                        open(args[i + 1], O_WRONLY | O_APPEND | O_CREAT, 0644);
+                    dup2(fd, STDOUT_FILENO);
                     close(fd);
-
                     args[i] = NULL;
-
                     break;
                 }
-
                 i++;
             }
 
             if (execvp(args[0], args) == -1) {
-                perror("lsh");
-                fflush(stdout);
+                printf("lsh: command not found\n");
             }
-
             exit(EXIT_FAILURE);
-        } else if (pid < 0) {
-            perror("lsh\n");
-            fflush(stdout);
         } else {
-            // Parent
             do {
                 waitpid(pid, &status, WUNTRACED);
             } while (!WIFEXITED(status) && !WIFSIGNALED(status));
+
+            enableRawMode();
         }
 
         free(args);
+        free(buf);
 
     } while (1);
     return 0;
