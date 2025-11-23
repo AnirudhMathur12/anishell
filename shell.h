@@ -39,9 +39,11 @@ void disableRawMode();
 void init_history();
 char *read_input(void);
 void add_to_history(char *line);
+void free_history_and_matches(void);
 
 // parser.c
 char **get_args(char *line);
+void free_args(char **args);
 
 // autocomplete.c
 MatchList get_matching_files(const char *prefix);
@@ -55,5 +57,6 @@ void add_alias(char *name, char *value);
 char *get_alias(char *name);
 int resolve_aliases(char ***args_ptr);
 void expand_args(char **args);
+void free_config(void);
 
 #endif

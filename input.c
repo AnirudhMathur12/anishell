@@ -1,4 +1,5 @@
 #include "shell.h"
+#include <stdio.h>
 
 struct termios orig_termios;
 char **prev = NULL; // Command history buffer
@@ -138,6 +139,8 @@ char *read_input(void) {
                         is_tabbing = 1;
                         match_index = 0;
                         last_match_len = len;
+                    } else {
+                        free_match_list(&matches);
                     }
                 }
             }
@@ -171,10 +174,6 @@ char *read_input(void) {
             continue;
         }
 
-        if (c == 4) { // Ctrl + D
-            exit(0);
-        }
-
         if (iscntrl(c)) {
             if (c == 10 || c == 13) { // ENTER
                 buf[buf_len] = '\0';
@@ -200,6 +199,24 @@ char *read_input(void) {
                             printf("\b");
                     }
                 }
+            } else if (c == 4) { // Ctrl + D
+                exit(0);
+            } else if (c == 12) {
+                printf("\033[2J\033[H");
+
+                char cwd[1024];
+                if (getcwd(cwd, sizeof(cwd)) != NULL) {
+                    printf("\033[1;34m%s\033[0m> ", cwd);
+                } else {
+                    printf("> ");
+                }
+
+                fflush(stdout);
+
+                printf("%s", buf);
+                fflush(stdout);
+
+                continue;
             }
         } else if (buf_len < 1023) {
 
@@ -232,4 +249,21 @@ void add_to_history(char *line) {
     if (prev && line) {
         prev[iter++] = strdup(line);
     }
+}
+
+void free_history_and_matches(void) {
+    if (prev) {
+        for (int i = 0; i < iter; i++) {
+            free(prev[i]);
+            prev[i] = NULL;
+        }
+        free(prev);
+        prev = NULL;
+        iter = 0;
+    }
+    if (original_prefix) {
+        free(original_prefix);
+        original_prefix = NULL;
+    }
+    free_match_list(&matches);
 }

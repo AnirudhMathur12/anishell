@@ -1,11 +1,12 @@
 #include "shell.h"
+#include <stdlib.h>
 
 void handle_sigint(int sig) { printf("\r\n"); }
 
 void exec_command_line(char *line) {
     char **args = get_args(line);
-    if (!args[0]) {
-        free(args);
+    if (!args || !args[0]) {
+        free_args(args);
         return;
     }
 
@@ -21,6 +22,13 @@ void exec_command_line(char *line) {
                 set_shell_var(args[1], eq + 1, 1);
             }
         }
+    } else if (strcmp(args[0], "echo") == 0) {
+        for (int i = 1; args[i]; i++) {
+            printf("%s", args[i]);
+            if (args[i + 1])
+                printf(" ");
+        }
+        printf("\n");
     } else if (strcmp(args[0], "alias") == 0) {
         if (args[1] && args[2]) {
             add_alias(args[1], args[2]);
@@ -61,7 +69,7 @@ void exec_command_line(char *line) {
         }
     }
 
-    free(args);
+    free_args(args);
 }
 
 void load_rc_file() {
@@ -91,6 +99,9 @@ int main(void) {
     enableRawMode();
     init_history();
     init_config();
+
+    atexit(free_config);
+    atexit(free_history_and_matches);
 
     load_rc_file();
 

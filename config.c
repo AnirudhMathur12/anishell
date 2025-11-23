@@ -77,7 +77,7 @@ char *get_alias(char *name) {
 
 int resolve_aliases(char ***args_ptr) {
     char **args = *args_ptr;
-    if (!args[0])
+    if (!args || !args[0])
         return 0;
 
     char *alias_val = get_alias(args[0]);
@@ -85,7 +85,14 @@ int resolve_aliases(char ***args_ptr) {
         return 0;
 
     char *val_copy = strdup(alias_val);
+    if (!val_copy)
+        return 0;
+
     char **alias_tokens = get_args(val_copy);
+    if (!alias_tokens) {
+        free(val_copy);
+        return 0;
+    }
 
     int alias_len = 0;
     while (alias_tokens[alias_len])
@@ -94,17 +101,24 @@ int resolve_aliases(char ***args_ptr) {
     while (args[args_len])
         args_len++;
 
-    char **new_args = malloc((alias_len + args_len) * sizeof(char *));
+    char **new_args = malloc((alias_len + args_len + 1) * sizeof(char *));
+    if (!new_args) {
+        free_args(alias_tokens);
+        free(val_copy);
+        return 0;
+    }
 
     int k = 0;
     for (int i = 0; i < alias_len; i++)
-        new_args[k++] = strdup(alias_tokens[i]);
+        new_args[k++] = strdup(alias_tokens[i]); // duplicate alias tokens
     for (int i = 1; i < args_len; i++)
-        new_args[k++] = args[i];
+        new_args[k++] = strdup(args[i]); // duplicate remaining original args
     new_args[k] = NULL;
 
-    free(args);
-    free(alias_tokens);
+    // free old structures
+    free_args(args);
+    free_args(alias_tokens);
+    free(val_copy);
 
     *args_ptr = new_args;
     return 1;
@@ -118,18 +132,43 @@ void expand_args(char **args) {
             if (home) {
                 size_t new_size = strlen(home) + strlen(args[i]) + 1;
                 char *new_arg = malloc(new_size);
+                if (!new_arg) {
+                    i++;
+                    continue;
+                }
                 snprintf(new_arg, new_size, "%s%s", home, &args[i][1]);
+                free(args[i]);
                 args[i] = new_arg;
             }
         } else if (args[i][0] == '$') {
             char *key = &args[i][1];
             char *val = get_shell_var(key);
-            if (val) {
-                args[i] = strdup(val);
-            } else {
-                args[i] = strdup("");
-            }
+            char *new_arg = val ? strdup(val) : strdup("");
+            if (!new_arg)
+                new_arg = strdup("");
+            free(args[i]);
+            args[i] = new_arg;
         }
         i++;
     }
+}
+
+void free_config(void) {
+    // free env vars
+    for (int i = 0; i < env_count; i++) {
+        free(env_vars[i].key);
+        free(env_vars[i].value);
+        env_vars[i].key = NULL;
+        env_vars[i].value = NULL;
+    }
+    env_count = 0;
+
+    // free aliases
+    for (int i = 0; i < alias_count; i++) {
+        free(alias_table[i].name);
+        free(alias_table[i].value);
+        alias_table[i].name = NULL;
+        alias_table[i].value = NULL;
+    }
+    alias_count = 0;
 }
