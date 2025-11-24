@@ -1,4 +1,6 @@
 #include "shell.h"
+#include <sys/dirent.h>
+#include <sys/stat.h>
 
 void free_match_list(MatchList *list) {
     if (list->items) {
@@ -13,29 +15,99 @@ void free_match_list(MatchList *list) {
 
 MatchList get_matching_files(const char *prefix) {
     MatchList list = {NULL, 0};
-    DIR *d;
-    struct dirent *dir;
+    char dir_path[1024] = ".";
+    char file_prefix[1024] = "";
+    char full_path[2048];
 
-    d = opendir(".");
+    char *last_slash = strrchr(prefix, '/');
+    if (last_slash) {
+        size_t dir_len = last_slash - prefix + 1;
+        strncpy(dir_path, prefix, dir_len);
+        dir_path[dir_len] = '\0';
+        strcpy(file_prefix, last_slash + 1);
+    } else {
+        strcpy(file_prefix, prefix);
+    }
+
+    DIR *d = opendir(dir_path);
     if (d) {
         int capacity = 10;
         list.items = malloc(capacity * sizeof(char *));
-        int prefix_len = strlen(prefix);
+        int prefix_len = strlen(file_prefix);
+        struct dirent *dir;
 
         while ((dir = readdir(d)) != NULL) {
-            if (strncmp(dir->d_name, prefix, prefix_len) == 0) {
+            if (strncmp(dir->d_name, file_prefix, prefix_len) == 0) {
                 if (strcmp(dir->d_name, ".") == 0 ||
                     strcmp(dir->d_name, "..") == 0)
                     continue;
 
                 if (list.count >= capacity) {
-                    capacity *= 2;
-                    list.items = realloc(list.items, capacity * sizeof(char *));
+                    int new_capacity = capacity * 2;
+                    char **tmp =
+                        realloc(list.items, new_capacity * sizeof(char *));
+                    if (!tmp) {
+                        free_match_list(&list);
+                        closedir(d);
+                        return list;
+                    }
+                    list.items = tmp;
+                    capacity = new_capacity;
                 }
-                list.items[list.count++] = strdup(dir->d_name);
+
+                if (strcmp(dir_path, ".") == 0) {
+                    snprintf(full_path, sizeof(full_path), "%s", dir->d_name);
+                } else {
+                    snprintf(full_path, sizeof(full_path), "%s%s", dir_path,
+                             dir->d_name);
+                }
+
+                struct stat st;
+
+                char stat_path[2048];
+                snprintf(stat_path, sizeof(stat_path), "%s%s", dir_path,
+                         dir->d_name);
+
+                if (stat(stat_path, &st) == 0 && S_ISDIR(st.st_mode)) {
+                    strcat(full_path, "/");
+                }
+
+                list.items[list.count++] = strdup(full_path);
             }
         }
+
         closedir(d);
     }
+
     return list;
 }
+
+// MatchList get_matching_files(const char *prefix) {
+//     MatchList list = {NULL, 0};
+//     DIR *d;
+//     struct dirent *dir;
+//
+//     d = opendir(".");
+//     if (d) {
+//         int capacity = 10;
+//         list.items = malloc(capacity * sizeof(char *));
+//         int prefix_len = strlen(prefix);
+//
+//         while ((dir = readdir(d)) != NULL) {
+//             if (strncmp(dir->d_name, prefix, prefix_len) == 0) {
+//                 if (strcmp(dir->d_name, ".") == 0 ||
+//                     strcmp(dir->d_name, "..") == 0)
+//                     continue;
+//
+//                 if (list.count >= capacity) {
+//                     capacity *= 2;
+//                     list.items = realloc(list.items, capacity * sizeof(char
+//                     *));
+//                 }
+//                 list.items[list.count++] = strdup(dir->d_name);
+//             }
+//         }
+//         closedir(d);
+//     }
+//     return list;
+// }
