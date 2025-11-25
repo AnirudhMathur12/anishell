@@ -1,5 +1,9 @@
 #include "shell.h"
+#if defined(__APPLE__) && defined(__MACH__)
 #include <sys/dirent.h>
+#elif (__linux__)
+#include <dirent.h>
+#endif
 #include <sys/stat.h>
 
 void free_match_list(MatchList *list) {
