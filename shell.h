@@ -39,6 +39,8 @@ void enableRawMode();
 void disableRawMode();
 void init_history();
 char *read_input(void);
+void load_history_from_file(const char *path);
+void save_history_to_file();
 void add_to_history(char *line);
 void free_history_and_matches(void);
 

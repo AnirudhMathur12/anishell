@@ -1,5 +1,8 @@
 #include "shell.h"
+#include <stdio.h>
 #include <stdlib.h>
+
+FILE *history;
 
 void handle_sigint(int sig) { printf("\r\n"); }
 
@@ -39,6 +42,8 @@ void exec_command_line(char *line) {
             perror("cd");
         }
     } else if (strcmp(args[0], "exit") == 0) {
+        free(line);
+        free_args(args);
         exit(0);
     } else {
         int pid = fork();
@@ -97,11 +102,22 @@ void load_rc_file() {
 
 int main(void) {
     enableRawMode();
+    atexit(disableRawMode);
     init_history();
+
+    char history_path[1024];
+    char *home = getenv("HOME");
+    if (home) {
+        snprintf(history_path, sizeof(history_path), "%s/.anishell_history",
+                 home);
+        load_history_from_file(history_path);
+    }
+
     init_config();
 
     atexit(free_config);
     atexit(free_history_and_matches);
+    atexit(save_history_to_file);
 
     load_rc_file();
 

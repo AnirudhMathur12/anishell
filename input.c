@@ -1,6 +1,8 @@
 #include "shell.h"
 #include <stdio.h>
 
+#define HISTORY_CAP 10000
+
 struct termios orig_termios;
 char **prev = NULL; // Command history buffer
 int iter = 0;       // Command history iterator
@@ -16,14 +18,31 @@ void disableRawMode() { tcsetattr(STDIN_FILENO, TCSAFLUSH, &orig_termios); }
 
 void enableRawMode() {
     tcgetattr(STDIN_FILENO, &orig_termios);
-    atexit(disableRawMode);
+    // atexit(disableRawMode);
     struct termios raw = orig_termios;
     raw.c_lflag &= ~(ECHO | ICANON | ECHONL | IEXTEN);
     tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
 }
 
+void load_history_from_file(const char *path) {
+    FILE *fp = fopen(path, "r");
+    if (!fp)
+        return;
+
+    char *line = NULL;
+    size_t len = 0;
+
+    while (getline(&line, &len, fp) != -1) {
+        line[strcspn(line, "\n")] = 0;
+        add_to_history(line);
+    }
+
+    free(line);
+    fclose(fp);
+}
+
 void init_history() {
-    prev = malloc(sizeof(char *) * 1024);
+    prev = malloc(sizeof(char *) * HISTORY_CAP);
     iter = 0;
 }
 
@@ -245,10 +264,34 @@ char *read_input(void) {
     return buf;
 }
 
-void add_to_history(char *line) {
-    if (prev && line) {
-        prev[iter++] = strdup(line);
+void save_history_to_file() {
+    printf("Yes sir\n");
+    char history_path[1024];
+    char *home = getenv("HOME");
+    snprintf(history_path, sizeof(history_path), "%s/.anishell_history", home);
+    FILE *fp = fopen(history_path, "w");
+    if (!fp)
+        return;
+
+    for (int i = 0; i < iter; i++) {
+        fprintf(fp, "%s\n", prev[i]);
     }
+
+    fclose(fp);
+}
+
+void add_to_history(char *line) {
+    if (!line || strlen(line) == 0)
+        return;
+
+    if (iter == HISTORY_CAP) {
+        free(prev[0]);
+
+        memmove(prev, prev + 1, sizeof(char *) * (HISTORY_CAP - 1));
+        iter--;
+    }
+
+    prev[iter++] = strdup(line);
 }
 
 void free_history_and_matches(void) {
