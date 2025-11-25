@@ -63,7 +63,7 @@ A lightweight shell written in C, as a hobby-project
  - Report issues or feature requests via the Issues tab.
  - Fork the repo, make your changes, and submit a pull request (PR).
  - Suggested enhancements:
-   - Add support for pipes (`|`), redirection (`>`, `<`).
+   - Add support for pipes (`|`), redirection (`<`).
    - Add more built‐in commands.
    - Improve line‐editing features (history, arrow keys).
    - Improve parsing (quoting, escaping).
