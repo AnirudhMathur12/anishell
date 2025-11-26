@@ -125,7 +125,7 @@ char *read_input(void) {
                     break;
                 }
             }
-            fflush(stdout);
+            // fflus(stdout);
             continue;
         }
 
@@ -189,7 +189,7 @@ char *read_input(void) {
                 match_index = (match_index + 1) % matches.count;
             }
 
-            fflush(stdout);
+            // fflush(stdout);
             continue;
         }
 
@@ -230,10 +230,10 @@ char *read_input(void) {
                     printf("> ");
                 }
 
-                fflush(stdout);
+                // fflush(stdout);
 
                 printf("%s", buf);
-                fflush(stdout);
+                // fflush(stdout);
 
                 continue;
             }
@@ -259,7 +259,7 @@ char *read_input(void) {
                 }
             }
         }
-        fflush(stdout);
+        // fflush(stdout);
     }
     return buf;
 }
