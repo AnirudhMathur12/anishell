@@ -67,7 +67,8 @@ void exec_command_line(char *line) {
             if (execvp(args[0], args) == -1) {
                 printf("anishell: command not found: %s\n", args[0]);
             }
-            exit(EXIT_FAILURE);
+            _exit(127);
+
         } else {
             wait(NULL);
             enableRawMode();

@@ -265,7 +265,7 @@ char *read_input(void) {
 }
 
 void save_history_to_file() {
-    printf("Yes sir\n");
+    // printf("Saving command histroy");
     char history_path[1024];
     char *home = getenv("HOME");
     snprintf(history_path, sizeof(history_path), "%s/.anishell_history", home);
