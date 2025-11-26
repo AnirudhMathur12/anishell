@@ -125,7 +125,7 @@ char *read_input(void) {
                     break;
                 }
             }
-            // fflus(stdout);
+            fflush(stdout);
             continue;
         }
 
@@ -189,7 +189,7 @@ char *read_input(void) {
                 match_index = (match_index + 1) % matches.count;
             }
 
-            // fflush(stdout);
+            fflush(stdout);
             continue;
         }
 
@@ -200,23 +200,51 @@ char *read_input(void) {
                 return buf;
             } else if (c == 127) { // BACKSPACE
                 if (cursor_pos > 0) {
-                    if (cursor_pos == buf_len) {
-                        cursor_pos--;
-                        buf_len--;
-                        buf[buf_len] = '\0';
-                        printf("\b \b");
-                    } else {
-                        memmove(&buf[cursor_pos - 1], &buf[cursor_pos],
-                                buf_len - cursor_pos);
-                        cursor_pos--;
-                        buf_len--;
-                        buf[buf_len] = '\0';
 
-                        printf("\b");
-                        printf("%s ", &buf[cursor_pos]);
-                        for (int i = 0; i < (buf_len - cursor_pos + 1); i++)
-                            printf("\b");
+                    memmove(&buf[cursor_pos - 1], &buf[cursor_pos],
+                            buf_len - cursor_pos);
+
+                    cursor_pos--;
+                    buf_len--;
+                    buf[buf_len] = '\0';
+
+                    printf("\r");
+                    char cwd[1024];
+
+                    if (getcwd(cwd, sizeof(cwd)) != NULL) {
+                        printf("\033[1;34m%s\033[0m> ", cwd);
+                    } else {
+                        printf("> ");
                     }
+
+                    printf("%s", buf);
+
+                    printf("\033[K");
+
+                    int tail_len = buf_len - cursor_pos;
+                    while (tail_len-- > 0) {
+                        printf("\033[D");
+                    }
+
+                    //
+                    //
+                    // if (cursor_pos == buf_len) {
+                    //     cursor_pos--;
+                    //     buf_len--;
+                    //     buf[buf_len] = '\0';
+                    //     printf("\b \b");
+                    // } else {
+                    //     memmove(&buf[cursor_pos - 1], &buf[cursor_pos],
+                    //             buf_len - cursor_pos);
+                    //     cursor_pos--;
+                    //     buf_len--;
+                    //     buf[buf_len] = '\0';
+                    //
+                    //     printf("\b");
+                    //     printf("%s ", &buf[cursor_pos]);
+                    //     for (int i = 0; i < (buf_len - cursor_pos + 1); i++)
+                    //         printf("\b");
+                    // }
                 }
             } else if (c == 4) { // Ctrl + D
                 exit(0);
@@ -230,10 +258,10 @@ char *read_input(void) {
                     printf("> ");
                 }
 
-                // fflush(stdout);
+                fflush(stdout);
 
                 printf("%s", buf);
-                // fflush(stdout);
+                fflush(stdout);
 
                 continue;
             }
@@ -254,12 +282,13 @@ char *read_input(void) {
 
                 printf("%s", &buf[cursor_pos - 1]);
 
-                for (int i = 0; i < (buf_len - cursor_pos); i++) {
-                    printf("\b");
+                int diff = buf_len - cursor_pos;
+                if (diff > 0) {
+                    printf("\033[%dD", diff);
                 }
             }
         }
-        // fflush(stdout);
+        fflush(stdout);
     }
     return buf;
 }

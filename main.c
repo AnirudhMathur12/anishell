@@ -102,7 +102,7 @@ void load_rc_file() {
 }
 
 int main(void) {
-    setvbuf(stdout, NULL, _IONBF, 0);
+    // setvbuf(stdout, NULL, _IONBF, 0);
 
     enableRawMode();
     atexit(disableRawMode);
@@ -135,7 +135,7 @@ int main(void) {
         } else {
             printf("> ");
         }
-        // fflush(stdout);
+        fflush(stdout);
 
         buf = read_input();
         if (!buf || strlen(buf) == 0) {
