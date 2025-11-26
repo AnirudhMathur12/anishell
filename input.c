@@ -1,5 +1,6 @@
 #include "shell.h"
 #include <stdio.h>
+#include <stdlib.h>
 
 #define HISTORY_CAP 10000
 
@@ -247,6 +248,7 @@ char *read_input(void) {
                     // }
                 }
             } else if (c == 4) { // Ctrl + D
+                free(buf);
                 exit(0);
             } else if (c == 12) {
                 printf("\033[2J\033[H");

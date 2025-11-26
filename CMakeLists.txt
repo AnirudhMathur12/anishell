@@ -5,10 +5,12 @@ project(SimpleShell C)
 set(CMAKE_C_STANDARD 99)
 set(CMAKE_C_STANDARD_REQUIRED True)
 
-add_compile_options(-Wall -Wextra -pedantic)
-add_compile_options(-fsanitize=address -g)
-
-set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fsanitize=address")
+if(ANNOYING)
+    message("Annoying mode is on")
+    add_compile_options(-Wall -Wextra -pedantic)
+    add_compile_options(-fsanitize=address -g)
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fsanitize=address")
+endif()
 
 add_executable(anishell
                     main.c
