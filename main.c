@@ -102,8 +102,6 @@ void load_rc_file() {
 }
 
 int main(void) {
-    // setvbuf(stdout, NULL, _IONBF, 0);
-
     enableRawMode();
     atexit(disableRawMode);
     init_history();
