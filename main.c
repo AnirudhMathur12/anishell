@@ -1,6 +1,8 @@
 #include "shell.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/fcntl.h>
+#include <unistd.h>
 
 FILE *history;
 
@@ -56,7 +58,32 @@ void exec_command_line(char *line) {
                 if (strcmp(">", args[i]) == 0) {
                     int fd =
                         open(args[i + 1], O_WRONLY | O_TRUNC | O_CREAT, 0644);
+                    if (fd == -1) {
+                        perror("open");
+                        exit(1);
+                    }
                     dup2(fd, STDOUT_FILENO);
+                    close(fd);
+                    args[i] = NULL;
+                    break;
+                } else if (strcmp(">>", args[i]) == 0) {
+                    int fd =
+                        open(args[i + 1], O_WRONLY | O_CREAT | O_APPEND, 0644);
+                    if (fd == -1) {
+                        perror("open");
+                        exit(1);
+                    }
+                    dup2(fd, STDOUT_FILENO);
+                    close(fd);
+                    args[i] = NULL;
+                    break;
+                } else if (strcmp("<", args[i]) == 0) {
+                    int fd = open(args[i + 1], O_RDONLY);
+                    if (fd == -1) {
+                        perror("open");
+                        exit(1);
+                    }
+                    dup2(fd, STDIN_FILENO);
                     close(fd);
                     args[i] = NULL;
                     break;
