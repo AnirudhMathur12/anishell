@@ -1,12 +1,16 @@
 #include "shell.h"
 #include <math.h>
+#include <stdio.h>
 
 void append_char(char **buffer, int *size, int *capacity, char c) {
     if (*size + 1 >= *capacity) {
         *capacity *= 2;
-        buffer = realloc(buffer, *capacity * sizeof(char *));
-        if (buffer)
+        char *temp = realloc(*buffer, *capacity * sizeof(char));
+        if (!temp) {
+            fprintf(stderr, "Allocation failed\n");
             exit(1);
+        }
+        *buffer = temp;
     }
 
     (*buffer)[*size] = c;
@@ -17,9 +21,12 @@ void append_char(char **buffer, int *size, int *capacity, char c) {
 void push_token(char ***args, int *count, int *capacity, char *tok) {
     if (*count + 1 >= *capacity) {
         *capacity *= 2;
-        args = realloc(args, *capacity * sizeof(char **));
-        if (args)
+        char **temp = realloc(*args, *capacity * sizeof(char *));
+        if (!temp) {
+            fprintf(stderr, "Allocation failed\n");
             exit(1);
+        }
+        *args = temp;
     }
 
     (*args)[*count] = strdup(tok);
@@ -75,55 +82,6 @@ char **get_args(char *line) {
 
     return args;
 }
-
-// char **get_args(char *line) {
-//     int capacity = 16;
-//     char **args = malloc(capacity * sizeof(char *));
-//     if (!args)
-//         return NULL;
-//     int count = 0;
-//     char *ptr = line;
-//
-//     while (*ptr) {
-//         while (*ptr && isspace((unsigned char)*ptr))
-//             ptr++;
-//
-//         if (*ptr == '\0')
-//             break;
-//
-//         if (*ptr == '"') {
-//             ptr++;
-//             char *start = ptr;
-//             while (*ptr && *ptr != '"')
-//                 ptr++;
-//             size_t len = (size_t)(ptr - start);
-//             char *token = strndup(start, len);
-//             if (!token)
-//                 token = strdup("");
-//             args[count++] = token;
-//             if (*ptr == '"')
-//                 ptr++;
-//         } else {
-//             char *start = ptr;
-//             while (*ptr && !isspace((unsigned char)*ptr))
-//                 ptr++;
-//             size_t len = (size_t)(ptr - start);
-//             char *token = strndup(start, len);
-//             if (!token)
-//                 token = strdup("");
-//             args[count++] = token;
-//         }
-//         if (count >= capacity - 1) {
-//             capacity *= 2;
-//             char **tmp = realloc(args, capacity * sizeof(char *));
-//             if (!tmp)
-//                 break;
-//             args = tmp;
-//         }
-//     }
-//     args[count] = NULL;
-//     return args;
-// }
 
 void free_args(char **args) {
     if (!args)

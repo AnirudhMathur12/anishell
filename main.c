@@ -1,6 +1,6 @@
 #include "shell.h"
 #include <stdio.h>
-#include <stdlib.h>
+#include <string.h>
 #include <sys/fcntl.h>
 #include <unistd.h>
 
@@ -8,17 +8,12 @@ FILE *history;
 
 void handle_sigint(int sig) { printf("\r\n"); }
 
-void exec_command_line(char *line) {
-    char **args = get_args(line);
-    if (!args || !args[0]) {
-        free_args(args);
-        return;
-    }
+int is_builtin(char *cmd) {
+    return (strcmp(cmd, "cd") == 0 || strcmp(cmd, "exit") == 0 ||
+            strcmp(cmd, "export") == 0 || strcmp(cmd, "alias") == 0);
+}
 
-    resolve_aliases(&args);
-
-    expand_args(args);
-
+void handle_builtin(char **args) {
     if (strcmp(args[0], "export") == 0) {
         if (args[1]) {
             char *eq = strchr(args[1], '=');
@@ -27,13 +22,6 @@ void exec_command_line(char *line) {
                 set_shell_var(args[1], eq + 1, 1);
             }
         }
-    } else if (strcmp(args[0], "echo") == 0) {
-        for (int i = 1; args[i]; i++) {
-            printf("%s", args[i]);
-            if (args[i + 1])
-                printf(" ");
-        }
-        printf("\n");
     } else if (strcmp(args[0], "alias") == 0) {
         if (args[1] && args[2]) {
             add_alias(args[1], args[2]);
@@ -44,68 +32,221 @@ void exec_command_line(char *line) {
             perror("cd");
         }
     } else if (strcmp(args[0], "exit") == 0) {
-        free(line);
-        free_args(args);
         exit(0);
-    } else {
-        int pid = fork();
+    }
+}
+
+int setup_redirections(char **args) {
+    int first_redir = -1;
+
+    for (int i = 0; args[i]; i++) {
+        int fd = -1;
+        int is_redir = 0;
+
+        if (strcmp(args[i], ">") == 0) {
+            if (args[i + 1] == NULL) {
+                fprintf(stderr, "Syntax error: expected file after >\n");
+                return -1;
+            }
+
+            fd = open(args[i + 1], O_WRONLY | O_TRUNC | O_CREAT, 0644);
+            if (fd == -1) {
+                perror("open");
+                return -1;
+            }
+
+            dup2(fd, STDOUT_FILENO);
+            close(fd);
+            is_redir = 1;
+        } else if (strcmp(args[i], ">>") == 0) {
+            if (args[i + 1] == NULL) {
+                fprintf(stderr, "Syntax error: expected file after >>\n");
+                return -1;
+            }
+
+            fd = open(args[i + 1], O_WRONLY | O_APPEND | O_CREAT, 0644);
+            if (fd == -1) {
+                perror("open");
+                return -1;
+            }
+
+            dup2(fd, STDOUT_FILENO);
+            close(fd);
+            is_redir = 1;
+        } else if (strcmp(args[i], "<") == 0) {
+            if (args[i + 1] == NULL) {
+                fprintf(stderr, "Syntax error: expected file after <\n");
+                return -1;
+            }
+
+            fd = open(args[i + 1], O_RDONLY);
+            if (fd == -1) {
+                perror("open");
+                return -1;
+            }
+
+            dup2(fd, STDIN_FILENO);
+            close(fd);
+            is_redir = 1;
+        } else if (strcmp(args[i], "2>") == 0) {
+            if (args[i + 1] == NULL) {
+                fprintf(stderr, "Syntax error: expected file after 2>\n");
+                return -1;
+            }
+
+            fd = open(args[i + 1], O_WRONLY | O_TRUNC | O_CREAT, 0644);
+            if (fd == -1) {
+                perror("open");
+                return -1;
+            }
+
+            dup2(fd, STDERR_FILENO);
+            close(fd);
+            is_redir = 1;
+        } else if (strcmp(args[i], "&>") == 0) {
+            if (args[i + 1] == NULL) {
+                fprintf(stderr, "Syntax error: expected file after &>\n");
+                return -1;
+            }
+            fd = open(args[i + 1], O_WRONLY | O_TRUNC | O_CREAT, 0644);
+            if (fd == -1) {
+                perror("open");
+                return -1;
+            }
+            dup2(fd, STDOUT_FILENO);
+            dup2(fd, STDERR_FILENO);
+            close(fd);
+            is_redir = 1;
+        } else if (strcmp(args[i], "2>&1") == 0) {
+            dup2(STDOUT_FILENO, STDERR_FILENO);
+            is_redir = 1;
+        }
+
+        if (is_redir && first_redir == -1) {
+            first_redir = i;
+        }
+    }
+
+    if (first_redir != -1) {
+        args[first_redir] = NULL;
+    }
+
+    return 0;
+}
+
+void execute_pipeline(char **args) {
+    int num_cmds = 0;
+    char *commands[64][64];
+
+    int arg_idx = 0;
+    int cmd_idx = 0;
+    commands[num_cmds][0] = NULL;
+
+    for (int i = 0; args[i] != NULL; i++) {
+        if (strcmp(args[i], "|") == 0) {
+            commands[num_cmds][cmd_idx] = NULL;
+            num_cmds++;
+            cmd_idx = 0;
+        } else {
+            commands[num_cmds][cmd_idx++] = args[i];
+        }
+    }
+    commands[num_cmds][cmd_idx] = NULL;
+    num_cmds++;
+
+    int i;
+    int prev_pipe_read = -1;
+    int fd[2];
+
+    for (i = 0; i < num_cmds; i++) {
+        if (i < num_cmds - 1) {
+            if (pipe(fd) == -1) {
+                perror("pipe");
+                return;
+            }
+        }
+
+        pid_t pid = fork();
+
         if (pid == 0) {
+
             disableRawMode();
             signal(SIGINT, SIG_DFL);
 
-            int i = 0;
-            while (args[i]) {
-                if (strcmp(">", args[i]) == 0) {
-                    int fd =
-                        open(args[i + 1], O_WRONLY | O_TRUNC | O_CREAT, 0644);
-                    if (fd == -1) {
-                        perror("open");
-                        exit(1);
-                    }
-                    dup2(fd, STDOUT_FILENO);
-                    close(fd);
-                    args[i] = NULL;
-                    break;
-                } else if (strcmp(">>", args[i]) == 0) {
-                    int fd =
-                        open(args[i + 1], O_WRONLY | O_CREAT | O_APPEND, 0644);
-                    if (fd == -1) {
-                        perror("open");
-                        exit(1);
-                    }
-                    dup2(fd, STDOUT_FILENO);
-                    close(fd);
-                    args[i] = NULL;
-                    break;
-                } else if (strcmp("<", args[i]) == 0) {
-                    int fd = open(args[i + 1], O_RDONLY);
-                    if (fd == -1) {
-                        perror("open");
-                        exit(1);
-                    }
-                    dup2(fd, STDIN_FILENO);
-                    close(fd);
-                    args[i] = NULL;
-                    break;
+            if (i > 0 && prev_pipe_read != -1) {
+                dup2(prev_pipe_read, STDIN_FILENO);
+                close(prev_pipe_read);
+            }
+
+            if (i < num_cmds - 1) {
+                dup2(fd[1], STDOUT_FILENO);
+                close(fd[1]);
+                close(fd[0]);
+            }
+
+            if (setup_redirections(commands[i]) == -1) {
+                exit(1);
+            }
+
+            if (strcmp(commands[i][0], "echo") == 0) {
+                for (int j = 1; commands[i][j]; j++) {
+                    printf("%s", commands[i][j]);
+                    if (commands[i][j + 1])
+                        printf(" ");
                 }
-                i++;
+                printf("\n");
+                exit(0);
             }
 
-            if (execvp(args[0], args) == -1) {
-                printf("anishell: command not found: %s\n", args[0]);
+            if (execvp(commands[i][0], commands[i]) == -1) {
+                fprintf(stderr, "anishell: command not found: %s\n",
+                        commands[i][0]);
+                exit(127);
             }
-            _exit(127);
-
-        } else {
-            wait(NULL);
-            enableRawMode();
         }
+
+        if (i > 0) {
+            close(prev_pipe_read);
+        }
+        if (i < num_cmds - 1) {
+            close(fd[1]);
+            prev_pipe_read = fd[0];
+        }
+    }
+
+    for (i = 0; i < num_cmds; i++) {
+        wait(NULL);
+    }
+
+    enableRawMode();
+}
+
+void exec_command_line(char *line) {
+    char **args = get_args(line);
+    if (!args || !args[0]) {
+        free_args(args);
+        return;
+    }
+
+    resolve_aliases(&args);
+    expand_args(args);
+
+    int has_pipe = 0;
+    for (int i = 0; args[i]; i++) {
+        if (strcmp(args[i], "|") == 0)
+            has_pipe = 1;
+    }
+
+    if (!has_pipe && is_builtin(args[0])) {
+        handle_builtin(args);
+    } else {
+        execute_pipeline(args);
     }
 
     free_args(args);
 }
 
-void load_rc_file() {
+void load_rc_file(void) {
     char path[1024];
     char *home = getenv("HOME");
     if (!home)

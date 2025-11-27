@@ -160,13 +160,23 @@ void expand_args(char **args) {
         if (args[i][0] == '~') {
             char *home = get_shell_var("HOME");
             if (home) {
-                size_t new_size = strlen(home) + strlen(args[i]) + 1;
-                char *new_arg = malloc(new_size);
-                snprintf(new_arg, new_size, "%s%s", home, &args[i][1]);
-                free(args[i]);
-                args[i] = new_arg;
-            } else if (strchr(args[i], '$')) {
-                char *expanded = expand_token(args[i]);
+                char *after_tilde = args[i] + 1;
+
+                size_t len = strlen(home) + strlen(after_tilde) + 1;
+                char *new_arg = malloc(len);
+
+                if (new_arg) {
+                    snprintf(new_arg, len, "%s%s", home, after_tilde);
+
+                    free(args[i]);
+                    args[i] = new_arg;
+                }
+            }
+        }
+
+        if (strchr(args[i], '$')) {
+            char *expanded = expand_token(args[i]);
+            if (expanded) {
                 free(args[i]);
                 args[i] = expanded;
             }

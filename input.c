@@ -72,10 +72,15 @@ char *read_input(void) {
                             printf("\b");
                             cursor_pos--;
                         }
-                        for (int i = 0; i < buf_len; i++)
-                            printf(" ");
-                        for (int i = 0; i < buf_len; i++)
-                            printf("\b");
+                        printf("\33[2K\r");
+                        char cwd[1024];
+
+                        if (getcwd(cwd, sizeof(cwd)) != NULL) {
+                            printf("\033[1;34m%s\033[0m> ", cwd);
+                        } else {
+                            printf("> ");
+                        }
+                        printf("%s", buf);
 
                         prev_iter--;
                         char *history_str = prev[prev_iter];
