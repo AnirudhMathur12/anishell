@@ -124,32 +124,53 @@ int resolve_aliases(char ***args_ptr) {
     return 1;
 }
 
+char *expand_token(char *token) {
+    char *result = malloc(4096);
+    char *res_ptr = result;
+    char *ptr = token;
+
+    while (*ptr) {
+        if (*ptr == '$') {
+            ptr++;
+            char var_name[256];
+            int v_index = 0;
+
+            while (*ptr && (isalnum((unsigned char)*ptr) || *ptr == '_')) {
+                var_name[v_index++] = *ptr++;
+            }
+
+            var_name[v_index] = '\0';
+
+            char *val = get_shell_var(var_name);
+            if (val) {
+                strcpy(res_ptr, val);
+                res_ptr += strlen(val);
+            }
+        } else {
+            *res_ptr++ = *ptr++;
+        }
+    }
+
+    *res_ptr = '\0';
+    return result;
+}
+
 void expand_args(char **args) {
-    int i = 0;
-    while (args[i]) {
+    for (int i = 0; args[i]; i++) {
         if (args[i][0] == '~') {
             char *home = get_shell_var("HOME");
             if (home) {
                 size_t new_size = strlen(home) + strlen(args[i]) + 1;
                 char *new_arg = malloc(new_size);
-                if (!new_arg) {
-                    i++;
-                    continue;
-                }
                 snprintf(new_arg, new_size, "%s%s", home, &args[i][1]);
                 free(args[i]);
                 args[i] = new_arg;
+            } else if (strchr(args[i], '$')) {
+                char *expanded = expand_token(args[i]);
+                free(args[i]);
+                args[i] = expanded;
             }
-        } else if (args[i][0] == '$') {
-            char *key = &args[i][1];
-            char *val = get_shell_var(key);
-            char *new_arg = val ? strdup(val) : strdup("");
-            if (!new_arg)
-                new_arg = strdup("");
-            free(args[i]);
-            args[i] = new_arg;
         }
-        i++;
     }
 }
 
