@@ -65,6 +65,8 @@ A lightweight shell written in C, as a hobby-project
  - Suggested enhancements:
    - Add more built‐in commands.
    - Improve line‐editing features (history, arrow keys).
+   - Job control
+   - Conditional operators (`&&` and `||`)
  - Please follow the coding style (e.g., indentation, naming) used in the project.
 ## License
 This project is licensed under the Apache License 2.0.
