@@ -1,4 +1,5 @@
 #include "shell.h"
+#include <stdint.h>
 #include <string.h>
 
 #define MAX_VARS 4096
@@ -9,6 +10,10 @@ int env_count = 0;
 
 Alias alias_table[MAX_ALIASES];
 int alias_count = 0;
+
+static uint8_t last_exit_status;
+
+void set_last_exit_status(uint8_t status) { last_exit_status = status; }
 
 void init_config() {
     env_count = 0;
@@ -134,14 +139,27 @@ char *expand_token(char *token) {
             ptr++;
             char var_name[256];
             int v_index = 0;
+            char status_st[16] = {0};
 
-            while (*ptr && (isalnum((unsigned char)*ptr) || *ptr == '_')) {
+            if (*ptr == '?') {
                 var_name[v_index++] = *ptr++;
+            } else {
+                while (*ptr && (isalnum((unsigned char)*ptr) || *ptr == '_')) {
+                    var_name[v_index++] = *ptr++;
+                }
             }
 
             var_name[v_index] = '\0';
 
-            char *val = get_shell_var(var_name);
+            char *val = NULL;
+
+            if (strcmp(var_name, "?") == 0) {
+                snprintf(status_st, sizeof(status_st), "%d", last_exit_status);
+                val = status_st;
+            } else {
+                val = get_shell_var(var_name);
+            }
+
             if (val) {
                 strcpy(res_ptr, val);
                 res_ptr += strlen(val);

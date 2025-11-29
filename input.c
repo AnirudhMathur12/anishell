@@ -1,6 +1,8 @@
 #include "shell.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
 
 #define HISTORY_CAP 10000
 
@@ -15,9 +17,9 @@ int is_tabbing = 0;
 char *original_prefix = NULL;
 int last_match_len = 0;
 
-void disableRawMode() { tcsetattr(STDIN_FILENO, TCSAFLUSH, &orig_termios); }
+void disableRawMode(void) { tcsetattr(STDIN_FILENO, TCSAFLUSH, &orig_termios); }
 
-void enableRawMode() {
+void enableRawMode(void) {
     tcgetattr(STDIN_FILENO, &orig_termios);
     // atexit(disableRawMode);
     struct termios raw = orig_termios;
@@ -42,14 +44,31 @@ void load_history_from_file(const char *path) {
     fclose(fp);
 }
 
-void init_history() {
+void init_history(void) {
     prev = malloc(sizeof(char *) * HISTORY_CAP);
     iter = 0;
 }
 
+void reset_tab_completion(void) {
+    if (is_tabbing) {
+        free_match_list(&matches);
+        if (original_prefix) {
+            free(original_prefix);
+            original_prefix = NULL;
+        }
+
+        is_tabbing = 0;
+        match_index = 0;
+        last_match_len = 0;
+    }
+}
+
 char *read_input(void) {
+    reset_tab_completion();
+
     char c;
     char *buf = malloc(1024);
+    char *temp_buf = NULL;
     int buf_len = 0;
     int cursor_pos = 0;
     int prev_iter = iter;
@@ -68,21 +87,24 @@ char *read_input(void) {
                 switch (seq[1]) {
                 case 'A': // UP ARROW (History)
                     if (prev_iter > 0) {
-                        while (cursor_pos > 0) {
-                            printf("\b");
-                            cursor_pos--;
-                        }
-                        printf("\33[2K\r");
-                        char cwd[1024];
 
+                        if (prev_iter == iter) {
+                            if (temp_buf)
+                                free(temp_buf);
+                            temp_buf = strdup(buf);
+                        }
+
+                        prev_iter--;
+
+                        printf("\33[2K\r");
+
+                        char cwd[1024];
                         if (getcwd(cwd, sizeof(cwd)) != NULL) {
                             printf("\033[1;34m%s\033[0m> ", cwd);
                         } else {
                             printf("> ");
                         }
-                        printf("%s", buf);
 
-                        prev_iter--;
                         char *history_str = prev[prev_iter];
                         memset(buf, 0, 1024);
                         if (history_str)
@@ -100,14 +122,25 @@ char *read_input(void) {
                             printf("\b");
                             cursor_pos--;
                         }
-                        for (int i = 0; i < buf_len; i++)
-                            printf(" ");
-                        for (int i = 0; i < buf_len; i++)
-                            printf("\b");
+
+                        printf("\33[2K\r");
+
+                        char cwd[1024];
+                        if (getcwd(cwd, 1023) != NULL) {
+                            printf("\033[1;34m%s\033[0m> ", cwd);
+                        } else {
+                            printf("> ");
+                        }
 
                         prev_iter++;
                         memset(buf, 0, 1024);
-                        if (prev_iter < iter) {
+                        if (prev_iter == iter) {
+                            if (temp_buf) {
+                                strncpy(buf, temp_buf, 1023);
+                                free(temp_buf);
+                                temp_buf = NULL;
+                            }
+                        } else {
                             strncpy(buf, prev[prev_iter], 1023);
                         }
 
@@ -136,13 +169,7 @@ char *read_input(void) {
         }
 
         if (c != '\t' && is_tabbing) {
-            is_tabbing = 0;
-            free_match_list(&matches);
-            if (original_prefix) {
-                free(original_prefix);
-                original_prefix = NULL;
-            }
-            last_match_len = 0;
+            reset_tab_completion();
         }
 
         if (c == '\t') {
@@ -201,6 +228,9 @@ char *read_input(void) {
 
         if (iscntrl(c)) {
             if (c == 10 || c == 13) { // ENTER
+                if (temp_buf)
+                    free(temp_buf);
+                reset_tab_completion();
                 buf[buf_len] = '\0';
                 printf("\r\n");
                 return buf;
@@ -214,47 +244,20 @@ char *read_input(void) {
                     buf_len--;
                     buf[buf_len] = '\0';
 
-                    printf("\r");
-                    char cwd[1024];
+                    printf("\b");
+                    printf("%s", &buf[cursor_pos]);
+                    printf(" ");
 
-                    if (getcwd(cwd, sizeof(cwd)) != NULL) {
-                        printf("\033[1;34m%s\033[0m> ", cwd);
-                    } else {
-                        printf("> ");
+                    int chars_to_rewind = (buf_len - cursor_pos) + 1;
+                    for (int i = 0; i < chars_to_rewind; i++) {
+                        printf("\b");
                     }
-
-                    printf("%s", buf);
-
-                    printf("\033[K");
-
-                    int tail_len = buf_len - cursor_pos;
-                    while (tail_len-- > 0) {
-                        printf("\033[D");
-                    }
-
-                    //
-                    //
-                    // if (cursor_pos == buf_len) {
-                    //     cursor_pos--;
-                    //     buf_len--;
-                    //     buf[buf_len] = '\0';
-                    //     printf("\b \b");
-                    // } else {
-                    //     memmove(&buf[cursor_pos - 1], &buf[cursor_pos],
-                    //             buf_len - cursor_pos);
-                    //     cursor_pos--;
-                    //     buf_len--;
-                    //     buf[buf_len] = '\0';
-                    //
-                    //     printf("\b");
-                    //     printf("%s ", &buf[cursor_pos]);
-                    //     for (int i = 0; i < (buf_len - cursor_pos + 1); i++)
-                    //         printf("\b");
-                    // }
                 }
             } else if (c == 4) { // Ctrl + D
-                free(buf);
-                exit(0);
+                if (buf_len == 0) {
+                    free(buf);
+                    exit(0);
+                }
             } else if (c == 12) {
                 printf("\033[2J\033[H");
 
@@ -300,7 +303,7 @@ char *read_input(void) {
     return buf;
 }
 
-void save_history_to_file() {
+void save_history_to_file(void) {
     // printf("Saving command histroy");
     char history_path[1024];
     char *home = getenv("HOME");

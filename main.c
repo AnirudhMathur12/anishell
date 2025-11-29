@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <sys/fcntl.h>
+#include <sys/wait.h>
 #include <unistd.h>
 
 FILE *history;
@@ -157,6 +158,7 @@ void execute_pipeline(char **args) {
     int i;
     int prev_pipe_read = -1;
     int fd[2];
+    pid_t final_command_pid = -1;
 
     for (i = 0; i < num_cmds; i++) {
         if (i < num_cmds - 1) {
@@ -205,6 +207,10 @@ void execute_pipeline(char **args) {
             }
         }
 
+        if (i == num_cmds - 1) {
+            final_command_pid = pid;
+        }
+
         if (i > 0) {
             close(prev_pipe_read);
         }
@@ -214,8 +220,18 @@ void execute_pipeline(char **args) {
         }
     }
 
+    int status = 0;
+
     for (i = 0; i < num_cmds; i++) {
-        wait(NULL);
+        if (i == num_cmds - 1 && final_command_pid != -1) {
+            waitpid(final_command_pid, &status, 0);
+        } else {
+            wait(NULL);
+        }
+    }
+
+    if (final_command_pid != -1) {
+        set_last_exit_status(WEXITSTATUS(status));
     }
 
     enableRawMode();
