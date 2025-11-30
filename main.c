@@ -11,7 +11,8 @@ void handle_sigint(int sig) { printf("\r\n"); }
 
 int is_builtin(char *cmd) {
     return (strcmp(cmd, "cd") == 0 || strcmp(cmd, "exit") == 0 ||
-            strcmp(cmd, "export") == 0 || strcmp(cmd, "alias") == 0);
+            strcmp(cmd, "export") == 0 || strcmp(cmd, "alias") == 0 ||
+            strcmp(cmd, "history") == 0);
 }
 
 void handle_builtin(char **args) {
@@ -34,6 +35,8 @@ void handle_builtin(char **args) {
         }
     } else if (strcmp(args[0], "exit") == 0) {
         exit(0);
+    } else if (strcmp(args[0], "history") == 0) {
+        print_history();
     }
 }
 

@@ -6,7 +6,6 @@
 #include <ctype.h>
 #include <dirent.h>
 #include <fcntl.h>
-#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -35,14 +34,15 @@ typedef struct {
 // Function Declarations
 
 // input.c
-void enableRawMode();
-void disableRawMode();
-void init_history();
+void enableRawMode(void);
+void disableRawMode(void);
+void init_history(void);
 char *read_input(void);
 void load_history_from_file(const char *path);
-void save_history_to_file();
+void save_history_to_file(void);
 void add_to_history(char *line);
 void free_history_and_matches(void);
+void print_history(void);
 
 // parser.c
 char **get_args(char *line);
@@ -54,7 +54,7 @@ void free_match_list(MatchList *list);
 
 // config.c
 void set_last_exit_status(uint8_t status);
-void init_config();
+void init_config(void);
 void set_shell_var(char *key, char *value, int exported);
 char *get_shell_var(char *key);
 void add_alias(char *name, char *value);

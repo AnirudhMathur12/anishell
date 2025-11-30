@@ -27,6 +27,14 @@ void enableRawMode(void) {
     tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
 }
 
+void print_history(void) {
+    if (!prev)
+        return;
+    for (int i = 0; i < iter; i++) {
+        printf("%d %s\n", i, prev[i]);
+    }
+}
+
 void load_history_from_file(const char *path) {
     FILE *fp = fopen(path, "r");
     if (!fp)
