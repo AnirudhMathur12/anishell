@@ -60,6 +60,11 @@ char **get_args(char *line) {
             in_single = !in_single;
         } else if (c == '"' && !in_single) {
             in_double = !in_double;
+        } else if (c == '#' && !in_single && !in_double) {
+            if (buf_size == 0)
+                break;
+            else
+                append_char(&buf, &buf_size, &buf_cap, c);
         } else if (isspace((unsigned char)c) && !in_double && !in_single) {
             if (buf_size > 0) {
                 push_token(&args, &args_count, &args_cap, buf);
