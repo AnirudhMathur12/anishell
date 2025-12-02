@@ -24,21 +24,19 @@ A lightweight shell written in C, as a hobby-project
    git clone https://github.com/AnirudhMathur12/anishell.git  
    cd anishell
 ```
-2. Create a build directory, run CMake and compile:
+2. Create a build directory, run CMake, compile and run the executable:
   ```sh
    mkdir build && cd build  
    cmake ..  
    make
-```
-or run the build.sh file
-  
-```
-  ./build.sh
-```
-3. Run the shell executable (assuming binary produced is `anishell`):
-  ```sh
    ./anishell
 ```
+Or simply run the build.sh file
+  
+```sh
+  ./build.sh
+```
+
 ## Usage
 - Launch the shell: you’re presented with a prompt.
 - On startup the shell will run `~/.anishellrc`.
