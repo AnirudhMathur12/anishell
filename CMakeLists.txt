@@ -40,5 +40,6 @@ add_executable(anishell
     input.c
     autocomplete.c
     config.c
+    utils.c
     shell.h
 )

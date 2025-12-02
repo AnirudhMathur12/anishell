@@ -106,12 +106,7 @@ char *read_input(void) {
 
                         printf("\33[2K\r");
 
-                        char cwd[1024];
-                        if (getcwd(cwd, sizeof(cwd)) != NULL) {
-                            printf("\033[1;34m%s\033[0m> ", cwd);
-                        } else {
-                            printf("> ");
-                        }
+                        print_prompt();
 
                         char *history_str = prev[prev_iter];
                         memset(buf, 0, 1024);
@@ -133,12 +128,7 @@ char *read_input(void) {
 
                         printf("\33[2K\r");
 
-                        char cwd[1024];
-                        if (getcwd(cwd, 1023) != NULL) {
-                            printf("\033[1;34m%s\033[0m> ", cwd);
-                        } else {
-                            printf("> ");
-                        }
+                        print_prompt();
 
                         prev_iter++;
                         memset(buf, 0, 1024);
@@ -269,13 +259,7 @@ char *read_input(void) {
             } else if (c == 12) {
                 printf("\033[2J\033[H");
 
-                char cwd[1024];
-                if (getcwd(cwd, sizeof(cwd)) != NULL) {
-                    printf("\033[1;34m%s\033[0m> ", cwd);
-                } else {
-                    printf("> ");
-                }
-
+                print_prompt();
                 fflush(stdout);
 
                 printf("%s", buf);

@@ -64,4 +64,7 @@ int resolve_aliases(char ***args_ptr);
 void expand_args(char **args);
 void free_config(void);
 
+// utils.c
+void print_prompt(void);
+
 #endif
