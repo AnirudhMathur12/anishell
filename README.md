@@ -66,8 +66,6 @@ Or simply run the build.sh file
  - Report issues or feature requests via the Issues tab.
  - Fork the repo, make your changes, and submit a pull request (PR).
  - Suggested enhancements:
-   - Add more built‐in commands.
-   - Improve line‐editing features (history, arrow keys).
    - Job control
    - Conditional operators (`&&` and `||`)
  - Please follow the coding style (e.g., indentation, naming) used in the project.
