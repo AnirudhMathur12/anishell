@@ -15,6 +15,8 @@ static uint8_t last_exit_status;
 
 void set_last_exit_status(uint8_t status) { last_exit_status = status; }
 
+uint8_t get_last_exit_status(void) { return last_exit_status; }
+
 void init_config() {
     env_count = 0;
     alias_count = 0;

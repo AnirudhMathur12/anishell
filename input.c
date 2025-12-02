@@ -260,6 +260,7 @@ char *read_input(void) {
                 printf("\033[2J\033[H");
 
                 print_prompt();
+
                 fflush(stdout);
 
                 printf("%s", buf);

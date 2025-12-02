@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.10)
 
 # only mess with the compiler path if we are on macos
-# linux users usually have a working sanitize setup by default
+# linux users usually have a working sanitize setup by default, lucky.
 if(APPLE)
     if(EXISTS "/opt/homebrew/opt/llvm/bin/clang")
         message(STATUS "macos detected: switching to brew llvm for leaks")

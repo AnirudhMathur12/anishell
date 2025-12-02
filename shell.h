@@ -55,6 +55,7 @@ void free_match_list(MatchList *list);
 
 // config.c
 void set_last_exit_status(uint8_t status);
+uint8_t get_last_exit_status(void);
 void init_config(void);
 void set_shell_var(char *key, char *value, int exported);
 char *get_shell_var(char *key);

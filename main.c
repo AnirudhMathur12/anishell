@@ -24,19 +24,25 @@ void handle_builtin(char **args) {
                 set_shell_var(args[1], eq + 1, 1);
             }
         }
+        set_last_exit_status(0);
     } else if (strcmp(args[0], "alias") == 0) {
         if (args[1] && args[2]) {
             add_alias(args[1], args[2]);
         }
+        set_last_exit_status(0);
     } else if (strcmp(args[0], "cd") == 0) {
         char *path = args[1] ? args[1] : get_shell_var("HOME");
         if (path && chdir(path) != 0) {
             perror("cd");
+            set_last_exit_status(1);
+        } else {
+            set_last_exit_status(0);
         }
     } else if (strcmp(args[0], "exit") == 0) {
         exit(0);
     } else if (strcmp(args[0], "history") == 0) {
         print_history();
+        set_last_exit_status(0);
     }
 }
 
@@ -240,6 +246,57 @@ void execute_pipeline(char **args) {
     enableRawMode();
 }
 
+void run_command_segment(char **args) {
+    if (!args || !args[0])
+        return;
+
+    int has_pipe = 0;
+    for (int i = 0; args[i]; i++) {
+        if (strcmp(args[i], "|") == 0) {
+            has_pipe = 1;
+            break;
+        }
+    }
+
+    if (!has_pipe && is_builtin(args[0])) {
+        handle_builtin(args);
+    } else {
+        execute_pipeline(args);
+    }
+}
+
+void execute_logic(char **args) {
+    int i = 0;
+    char **current_segment = args;
+    int should_run = 1;
+
+    while (args[i]) {
+        if (strcmp(args[i], "&&") == 0 || strcmp(args[i], "||") == 0) {
+            char *op = args[i];
+            args[i] = NULL;
+
+            if (should_run) {
+                run_command_segment(current_segment);
+            }
+
+            int status = get_last_exit_status();
+
+            if (strcmp(op, "&&") == 0) {
+                should_run = (status == 0);
+            } else {
+                should_run = (status != 0);
+            }
+
+            current_segment = &args[i + 1];
+        }
+        i++;
+    }
+
+    if (should_run && current_segment[0]) {
+        run_command_segment(current_segment);
+    }
+}
+
 void exec_command_line(char *line) {
     char **args = get_args(line);
     if (!args || !args[0]) {
@@ -250,17 +307,7 @@ void exec_command_line(char *line) {
     resolve_aliases(&args);
     expand_args(args);
 
-    int has_pipe = 0;
-    for (int i = 0; args[i]; i++) {
-        if (strcmp(args[i], "|") == 0)
-            has_pipe = 1;
-    }
-
-    if (!has_pipe && is_builtin(args[0])) {
-        handle_builtin(args);
-    } else {
-        execute_pipeline(args);
-    }
+    execute_logic(args);
 
     free_args(args);
 }
