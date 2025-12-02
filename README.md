@@ -29,7 +29,12 @@ A lightweight shell written in C, as a hobby-project
    mkdir build && cd build  
    cmake ..  
    make
-``` 
+```
+or run the build.sh file
+  
+```
+  ./build.sh
+```
 3. Run the shell executable (assuming binary produced is `anishell`):
   ```sh
    ./anishell
