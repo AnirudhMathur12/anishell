@@ -31,11 +31,45 @@ void handle_builtin(char **args) {
         }
         set_last_exit_status(0);
     } else if (strcmp(args[0], "cd") == 0) {
-        char *path = args[1] ? args[1] : get_shell_var("HOME");
-        if (path && chdir(path) != 0) {
-            perror("cd");
+
+        char cwd[1024];
+        char *target = args[1];
+
+        if (getcwd(cwd, sizeof(cwd)) == NULL) {
+            perror("anishell: getcwd");
+            set_last_exit_status(1);
+            return;
+        }
+
+        if (target && strcmp(target, "-") == 0) {
+            target = get_shell_var("OLDPWD");
+            if (!target) {
+                fprintf(stderr, "anishell: OLDPWD not set\n");
+                set_last_exit_status(1);
+                return;
+            }
+            printf("%s\n", target);
+
+        } else if (!target) {
+            target = get_shell_var("HOME");
+            if (!target) {
+                fprintf(stderr, "anishell: HOME not set\n");
+                set_last_exit_status(1);
+                return;
+            }
+        }
+
+        if (chdir(target) != 0) {
+            perror("anishell: cd");
             set_last_exit_status(1);
         } else {
+            set_shell_var("OLDPWD", cwd, 1);
+
+            char new_cwd[1024];
+            if (getcwd(new_cwd, sizeof(new_cwd)) != NULL) {
+                set_shell_var("PWD", new_cwd, 1);
+            }
+
             set_last_exit_status(0);
         }
     } else if (strcmp(args[0], "exit") == 0) {
