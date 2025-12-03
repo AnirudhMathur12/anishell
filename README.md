@@ -67,7 +67,6 @@ Or simply run the build.sh file
  - Fork the repo, make your changes, and submit a pull request (PR).
  - Suggested enhancements:
    - Job control
-   - Conditional operators (`&&` and `||`)
  - Please follow the coding style (e.g., indentation, naming) used in the project.
 ## License
 This project is licensed under the Apache License 2.0.
