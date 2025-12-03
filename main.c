@@ -233,6 +233,11 @@ void execute_pipeline(char **args) {
                 exit(1);
             }
 
+            if (is_builtin(commands[i][0])) {
+                handle_builtin(commands[i]);
+                exit(0);
+            }
+
             if (strcmp(commands[i][0], "echo") == 0) {
                 for (int j = 1; commands[i][j]; j++) {
                     printf("%s", commands[i][j]);
