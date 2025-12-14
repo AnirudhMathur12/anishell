@@ -71,5 +71,3 @@ Or simply run the build.sh file
 ## License
 This project is licensed under the Apache License 2.0.
 See the LICENSE file for full details.
-
-Last updated: 23/11/2025
